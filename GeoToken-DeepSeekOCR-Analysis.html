@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoToken × DeepSeek-OCR：可迁移与不可迁移的分析</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f5f6fa;
+    color: #1a1a2e;
+    line-height: 1.8;
+    padding: 0;
+  }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    color: #fff;
+    padding: 80px 24px 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 50%, rgba(139,92,246,0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: 1px;
+    position: relative;
+    z-index: 1;
+  }
+  .hero .subtitle {
+    margin-top: 16px;
+    font-size: clamp(0.95rem, 2vw, 1.15rem);
+    color: #a5b4fc;
+    font-weight: 300;
+    position: relative;
+    z-index: 1;
+  }
+  .hero .badge {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 6px 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    font-size: 0.82rem;
+    color: #c7d2fe;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Container */
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Sections */
+  main { padding: 48px 0 80px; }
+
+  section {
+    background: #fff;
+    border-radius: 14px;
+    padding: 36px 40px;
+    margin-bottom: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #eef0ff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: #1e1b4b;
+  }
+  h3:first-of-type { margin-top: 0; }
+
+  p { margin-bottom: 14px; color: #334155; }
+  p:last-child { margin-bottom: 0; }
+
+  /* Tags */
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .tag {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .tag-ok   { background: #dcfce7; color: #166534; }
+  .tag-no   { background: #fef2f2; color: #991b1b; }
+  .tag-key  { background: #eef2ff; color: #4338ca; }
+
+  /* Thesis block */
+  .thesis {
+    background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+    border-left: 4px solid #6366f1;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    font-size: 0.98rem;
+    color: #1e1b4b;
+    line-height: 1.9;
+  }
+  .thesis strong {
+    color: #312e81;
+  }
+
+  /* Code blocks */
+  pre {
+    background: #1a1a2e;
+    color: #e2e8f0;
+    padding: 18px 22px;
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.65;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+    white-space: pre;
+  }
+  pre .comment { color: #64748b; font-style: italic; }
+  pre .keyword { color: #a78bfa; }
+  pre .arrow   { color: #34d399; }
+  pre .warn    { color: #fbbf24; }
+
+  .code-label {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 12px;
+    border-radius: 6px 6px 0 0;
+    margin-bottom: 0;
+  }
+  .code-label.bad  { background: #fecaca; color: #991b1b; }
+  .code-label.good { background: #bbf7d0; color: #166534; }
+
+  /* Comparison */
+  .comp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0 20px;
+  }
+  @media (max-width: 640px) {
+    section { padding: 24px 20px; }
+    .comp-grid { grid-template-columns: 1fr; }
+  }
+  .comp-card {
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .comp-card.bad {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+  }
+  .comp-card.good {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+  }
+  .comp-card h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .comp-card.bad h4  { color: #991b1b; }
+  .comp-card.good h4 { color: #166534; }
+  .comp-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .comp-card li {
+    font-size: 0.88rem;
+    color: #334155;
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+  .comp-card li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 11px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .comp-card.bad li::before  { background: #f87171; }
+  .comp-card.good li::before { background: #4ade80; }
+
+  /* Architecture box */
+  .arch {
+    background: #1a1a2e;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin: 20px 0 10px;
+    overflow-x: auto;
+  }
+  .arch pre {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+  }
+
+  .arch .hl-important {
+    background: rgba(251,191,36,0.15);
+    border-left: 3px solid #fbbf24;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 12px 0 0;
+    color: #fde68a;
+    font-size: 0.88rem;
+  }
+
+  /* Final box */
+  .final-box {
+    background: linear-gradient(135deg, #0f0c29, #24243e);
+    color: #e2e8f0;
+    border-radius: 14px;
+    padding: 32px 36px;
+  }
+  .final-box .highlight {
+    color: #fbbf24;
+    font-weight: 600;
+  }
+  .final-box .accent {
+    color: #a78bfa;
+  }
+  .final-box .question {
+    margin-top: 16px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: #cbd5e1;
+  }
+  .final-box .question strong {
+    color: #fbbf24;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 24px 0;
+  }
+
+  /* Lists */
+  ul.checklist, ul.crosslist {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 16px;
+  }
+  ul.checklist li, ul.crosslist li {
+    padding: 5px 0 5px 26px;
+    position: relative;
+    font-size: 0.93rem;
+    color: #334155;
+  }
+  ul.checklist li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #16a34a;
+    font-weight: 700;
+  }
+  ul.crosslist li::before {
+    content: '✗';
+    position: absolute;
+    left: 0;
+    color: #dc2626;
+    font-weight: 700;
+  }
+
+  .insight {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    color: #92400e;
+  }
+
+  .metric-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 16px;
+  }
+  .metric-list .m {
+    background: #eef2ff;
+    color: #4338ca;
+    padding: 4px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+  .metric-list .m.warn {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: #94a3b8;
+    font-size: 0.82rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>GeoToken × DeepSeek-OCR</h1>
+  <p class="subtitle">可迁移与不可迁移的系统分析</p>
+  <span class="badge">遥感 3D · 几何保持视觉分词 · 跨视角压缩</span>
+</div>
+
+<main class="container">
+
+  <!-- 1. Core Thesis -->
+  <section>
+    <h2><span class="num">1</span> 核心判断</h2>
+    <div class="thesis">
+      <strong>可以迁移思想，不能直接迁移方法。</strong>
+      更准确的研究表述应当是：<br>
+      <em>"Inspired by DeepSeek-OCR's optical compression, we study geometry-preserving visual tokenization for remote sensing 3D, where multi-view observations are compacted into compact tokens while preserving correspondence, disparity, and metric 3D geometry."</em>
+    </div>
+    <p>DeepSeek-OCR 的关键结论：把长文本映射到二维图像后，可以用少量 vision tokens 承载大量文本信息。论文中，text tokens / vision tokens 小于 10× 时 OCR 解码精度约 97%，到 20× 时还有约 60%。这说明视觉 token 是高密度信息载体，也说明压缩是有边界的。</p>
+    <p>迁移到 GeoToken 时，最重要的判断是：<strong>DeepSeek-OCR 压的是"二维可读信息"；GeoToken 要压的是"多视角几何证据"。</strong> 这两者不是同一个问题。</p>
+  </section>
+
+  <!-- 2. 本质差异 -->
+  <section>
+    <h2><span class="num">2</span> 本质差异：OCR vs 遥感 3D</h2>
+    <div class="comp-grid">
+      <div class="comp-card bad">
+        <h4>DeepSeek-OCR 压缩目标</h4>
+        <ul>
+          <li>一页文字在图像里是固定的 2D 排布</li>
+          <li>模型只需要从图中恢复离散文字</li>
+          <li>局部模糊时，语言模型可凭上下文补全</li>
+        </ul>
+      </div>
+      <div class="comp-card good">
+        <h4>GeoToken 必须保留的信息</h4>
+        <ul>
+          <li>同名点 correspondence</li>
+          <li>视差 disparity &amp; 射线 ray</li>
+          <li>相机 / RPC 几何</li>
+          <li>高度 / 深度连续值</li>
+          <li>边缘和结构线</li>
+          <li>遮挡关系</li>
+          <li>多视角一致性</li>
+        </ul>
+      </div>
+    </div>
+    <p class="insight">这些几何信息一旦在压缩阶段丢失，后面的 3D decoder 很难凭语义补回来。所以 GeoToken 不能是普通 visual tokenization，而必须是 <strong>geometry-preserving visual tokenization</strong>。</p>
+  </section>
+
+  <!-- 3. 可迁移的部分 -->
+  <section>
+    <h2><span class="num">3</span> 可以借鉴的三类结构</h2>
+
+    <h3>① 高分辨率输入 + 中间 compressor + 少量 token 输出</h3>
+    <p>DeepSeek-OCR 的 DeepEncoder 设计目标是在高分辨率输入下保持较低 activation，并把视觉信息压到可控数量的 vision tokens。对遥感也类似：原始影像很大，必须压缩，否则 token 成本爆炸。</p>
+
+    <h3>② 多档 token budget 的可扩展设计</h3>
+    <p>DeepSeek-OCR 用不同分辨率和 token 数测试压缩率与恢复精度的关系。GeoToken 也可以建立类似的曲线：</p>
+    <pre><span class="comment"># 预期的 scaling law</span>
+token 数量 ↓  →  DSM / depth / point cloud 误差 ↑</pre>
+    <p>从而证明：在多少 token 下，几何信息还能保持到什么程度。</p>
+
+    <h3>③ encoder-decoder 验证范式</h3>
+    <p>DeepSeek-OCR 用 OCR 恢复精度验证 vision token 是否保留了文本信息。GeoToken 可以定义对应的几何度量：</p>
+    <div class="metric-list">
+      <span class="m">DSM 误差</span>
+      <span class="m">depth 误差</span>
+      <span class="m">reprojection error</span>
+      <span class="m">Chamfer distance</span>
+      <span class="m">photometric consistency</span>
+    </div>
+  </section>
+
+  <!-- 4. 不可迁移的部分 -->
+  <section>
+    <h2><span class="num">4</span> 不能迁移的三个限制</h2>
+
+    <h3>① 不能单张图独立压缩</h3>
+    <p>DeepSeek-OCR 处理的是单页图像；遥感 3D 依赖多视角匹配。每个视角各自压成 tokens 再让 decoder 自己去猜对应关系，风险很高。</p>
+    <div class="code-label bad">错误路线</div>
+    <pre>
+image1 → tokens1
+image2 → tokens2
+image3 → tokens3
+         ↓
+  decoder 自己学 3D</pre>
+    <div class="code-label good">合理路线</div>
+    <pre>
+multi-view images + camera/RPC
+         ↓
+geometry-aware cross-view aggregation
+         ↓
+   compress into geometry tokens
+         ↓
+       3D decoder</pre>
+    <p><strong>跨视角对应关系应该在压缩前或压缩过程中建立，而不是压缩后才补救。</strong></p>
+
+    <h3>② 不能只用普通 2D position embedding</h3>
+    <p>OCR 的位置编码主要服务于页面文字位置；GeoToken 的位置编码必须服务于三维几何。token 里至少要包含：</p>
+    <div class="metric-list">
+      <span class="m">pixel coordinate</span>
+      <span class="m">camera I/E / RPC</span>
+      <span class="m">ray direction</span>
+      <span class="m">GSD / scale</span>
+      <span class="m">height hypothesis</span>
+      <span class="m">geo-coordinate prior</span>
+      <span class="m">viewing angle</span>
+    </div>
+    <p>否则 token 可能知道"这里像建筑"，但不知道"这个建筑边缘对应哪条空间射线、可能在哪个高度"。</p>
+
+    <h3>③ 不能只用重建 / 语义 loss</h3>
+    <p>OCR 解码的是离散文本；GeoToken 解码的是连续几何。训练目标必须加入度量约束：</p>
+    <div class="metric-list">
+      <span class="m">depth / height loss</span>
+      <span class="m">DSM loss</span>
+      <span class="m">multi-view reprojection loss</span>
+      <span class="m">photometric consistency</span>
+      <span class="m">epipolar matching loss</span>
+      <span class="m">normal / edge consistency</span>
+      <span class="m">Chamfer distance</span>
+      <span class="m warn">uncertainty loss</span>
+    </div>
+    <p>否则 token 可能保留语义，却不保留几何精度。</p>
+  </section>
+
+  <!-- 5. Proposed Architecture -->
+  <section>
+    <h2><span class="num">5</span> 可行的 GeoToken 设计</h2>
+
+    <div class="arch">
+      <pre>
+<span class="comment"># ─── GeoToken 整体架构 ───</span>
+
+<span style="color:#fbbf24">Multi-view remote sensing images</span>
+         + <span style="color:#a78bfa">RPC / camera geometry</span>
+         + <span style="color:#a78bfa">GSD / geo metadata</span>
+               ↓
+        Dense image encoder
+               ↓
+     <span style="color:#34d399">Ray-aware positional encoding</span>
+               ↓
+     <span style="color:#34d399">Epipolar / plane-sweep / cost-volume aggregation</span>
+               ↓
+     Geometry-preserving token compressor
+               ↓
+           <span style="color:#fbbf24">GeoTokens</span>
+               ↓
+<span style="color:#a78bfa">DSM / depth / point cloud / Gaussian / mesh decoder</span></pre>
+      <div class="hl-important">
+        ⚡ 最关键的是中间两步：<strong>ray-aware positional encoding</strong> 和 <strong>geometry-aware cross-view aggregation</strong>。没有这两步，所谓"借鉴 DeepSeek-OCR"就容易变成普通图像压缩，对 3D 重建帮助有限。
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Final -->
+  <section class="final-box">
+    <h2 style="border-bottom-color: rgba(255,255,255,0.1); color: #f1f5f9;"><span class="num">6</span> 最终判断</h2>
+
+    <p><span class="highlight">可以迁移思想，不能直接迁移方法。</span></p>
+
+    <p class="accent">这个方向是成立的，而且有研究价值。</p>
+
+    <p style="color: #cbd5e1;">真正的难点不在"能不能压缩"，而在于——</p>
+
+    <div class="question">
+      <strong>压缩后的 token 是否仍然可匹配、可定位、可恢复连续三维坐标？</strong><br><br>
+      <span style="color: #94a3b8;">这，才是 GeoToken 真正的核心问题。</span>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  GeoToken × DeepSeek-OCR &mdash; 研究笔记
+</footer>
+
+</body>
+</html>

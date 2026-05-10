@@ -1,0 +1,53 @@
+experiment:
+  name: geotoken_compression_sweep
+  seed: 7
+
+data:
+  dataset: placeholder_remote_sensing_multiview
+  patch_size: 256
+  views: 3
+  train_split: train
+  val_split: val
+
+model:
+  image_feature_dim: 256
+  token_dim: 256
+  ray_dim: 16
+  height_hypotheses: 6
+  height_range_m: 50.0
+  decoder_dim: 256
+  attention_heads: 8
+  encoder_layers: 4
+  decoder_layers: 3
+  decoder: query
+  initial_grid_size: 8
+  window_size: 8
+  output_size: 256
+  token_counts: [32, 64, 128, 256, 512, 1024]
+
+loss:
+  dsm_l1_weight: 1.0
+  dsm_rmse_weight: 0.5
+  edge_bce_weight: 0.2
+  normal_cosine_weight: 0.1
+  reprojection_weight: 0.0
+
+train:
+  batch_size: 4
+  epochs: 80
+  lr: 0.0002
+  weight_decay: 0.01
+  query_points: 2048
+  precision: auto
+
+eval:
+  val_fraction: 0.1
+  val_interval: 1
+  val_limit_steps: null
+  metrics:
+    - dsm_rmse
+    - dsm_mae
+    - boundary_f1
+    - discontinuity_mae
+    - peak_memory_mb
+    - inference_ms
